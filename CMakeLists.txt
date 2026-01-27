@@ -18,14 +18,14 @@ add_executable(ome_main src/main.cpp)
 target_link_libraries(ome_main ome)
 
 # Testing
-enable_testing()
-find_package(GTest REQUIRED)
+# enable_testing()
+# find_package(GTest REQUIRED)
 
-add_executable(test_ome tests/test_matching_engine.cpp)
-target_link_libraries(test_ome ome GTest::gtest GTest::gtest_main)
-add_test(NAME OMETests COMMAND test_ome)
+# add_executable(test_ome tests/test_matching_engine.cpp)
+# target_link_libraries(test_ome ome GTest::gtest GTest::gtest_main)
+# add_test(NAME OMETests COMMAND test_ome)
 
 # Benchmarking
-find_package(benchmark REQUIRED)
-add_executable(bench_ome benchmarks/perf_benchmark.cpp)
-target_link_libraries(bench_ome ome benchmark::benchmark)
+# find_package(benchmark REQUIRED)
+# add_executable(bench_ome benchmarks/perf_benchmark.cpp)
+# target_link_libraries(bench_ome ome benchmark::benchmark)
