@@ -26,13 +26,13 @@ public:
     }
 
     //Stats
-    struct stats {
+    struct Stats {
         std::atomic<uint64_t> total_orders{0};
         std::atomic<uint64_t> total_trades{0};
         std::atomic<uint64_t> total_volume{0};
     };
 
-    const stats& getStats() const {
+    const Stats& getStats() const {
         return stats_;
     }
     void printStats() const;
@@ -53,5 +53,3 @@ private:
 
     Trade create_trade(const Order& buy_order, const Order& sell_order, Quantity trade_quantity, Price trade_price);
 };
-
-#endif // EXCHANGE_MATCHING_ENGINE_H

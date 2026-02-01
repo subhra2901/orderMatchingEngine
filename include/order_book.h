@@ -7,7 +7,7 @@
 #include <vector>
 #include <memory>
 
-namespace exchange {
+
 
 class OrderBook {
 public:
@@ -54,3 +54,4 @@ private:
 
     bool removeFromLookup(const OrderID& order_id);
 };
+

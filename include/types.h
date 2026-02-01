@@ -4,7 +4,7 @@
 #include <vector>
 
 /* Type Aliases */
-using OrderId = uint64_t; // 64-bit unique identifier for an order
+using OrderID = uint64_t; // 64-bit unique identifier for an order
 using Price = double; // Price of an order
 using Quantity = uint64_t; // Quantity of an order
 using Timestamp = uint64_t; // Timestamp of an order
@@ -32,14 +32,14 @@ enum class OrderStatus {
 /* Core Structures */
 struct Order {
     //Identifiers
-    OrderId id;
+    OrderID id;
     Symbol symbol;
 
     //Attributes
     OrderSide side;
     OrderType type;
     Price price; //Price per unit of the asset,0 if the order is a market order
-    Quantity qty; //Quantity of the asset to be traded
+    Quantity quantity; //Quantity of the asset to be traded
 
     // Execution Tracking
     Quantity quantity_filled=0; //Quantity of the asset that has been executed
@@ -49,14 +49,14 @@ struct Order {
     Timestamp timestamp; //Timestamp when the order was created, nanoseconds since epoch
 
     //Convenience Methods
-    bool is_filled() const { return quantity_filled >= qty; }
+    bool is_filled() const { return quantity_filled >= quantity; }
 
-    Quantity remaining_qty() const { return qty - quantity_filled; }
+    Quantity remaining_qty() const { return quantity - quantity_filled; }
 };
 
 struct Trade {
-    OrderId buy_order_id; //ID of the buyer's order
-    OrderId sell_order_id; //ID of the seller's order
+    OrderID buy_order_id; //ID of the buyer's order
+    OrderID sell_order_id; //ID of the seller's order
     Symbol symbol; //Symbol of the asset traded
     Price price; //Price at which the trade was executed
     Quantity quantity; //Quantity of the asset traded
