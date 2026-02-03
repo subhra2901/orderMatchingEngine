@@ -2,7 +2,7 @@
 
 #include <types.h>
 #include <map>
-#include <deque>
+#include <list>
 #include <unordered_map>
 #include <vector>
 #include <memory>
@@ -39,10 +39,10 @@ private:
 
     //Order book structures
     // Buy Orders: Price -> Deque of Orders (sorted descending)
-    std::map<Price, std::deque<Order>, std::greater<Price>> buy_orders_;
+    std::map<Price, std::list<Order>> buy_orders_;
 
     // Sell Orders: Price -> Deque of Orders (sorted ascending)
-    std::map<Price, std::deque<Order>> sell_orders_;
+    std::map<Price, std::list<Order>> sell_orders_;
 
     //Order ID to OrderInfo mapping for quick access
     std::unordered_map<OrderID, OrderInfo> order_lookup_;

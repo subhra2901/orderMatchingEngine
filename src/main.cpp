@@ -3,9 +3,16 @@
 #include <iostream>
 #include <chrono>
 
+#include <../logging/logger.hpp>
+
+static Logger logger("matching_engine");
 int main(){
+    
+
     MatchingEngine engine;
     
+    LOG_INFO(logger, "Initialized Matching Engine");
+
     std::cout << "Starting Matching Engine..." << std::endl;
 
     //Create some test orders
@@ -38,6 +45,8 @@ int main(){
     std::cout << "Trades Generated from Buy Order:" << trades2.size() << std::endl;
 
     engine.printStats();
+
+    LOG_INFO(logger, "Shutting down Matching Engine");
 
     return 0;
 

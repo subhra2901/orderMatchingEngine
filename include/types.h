@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-
+#include <list>
 /* Type Aliases */
 using OrderID = uint64_t; // 64-bit unique identifier for an order
 using Price = double; // Price of an order
@@ -86,6 +86,6 @@ struct L2Quote {
 struct OrderInfo {
     OrderSide side;
     Price price;
-    size_t position_in_deque; //Position in the deque of orders at this price level
+    std::list<Order>::iterator list_it;    
 };
 

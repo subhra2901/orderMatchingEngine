@@ -19,6 +19,7 @@ find_package(Threads REQUIRED)
 add_library(ome
     src/order_book.cpp
     src/matching_engine.cpp
+    logging/logger.cpp
 )
 target_include_directories(ome PUBLIC include)
 target_compile_features(ome PUBLIC cxx_std_20)
@@ -45,6 +46,8 @@ endif()
 install(TARGETS ome_main test_ome
     RUNTIME DESTINATION bin
 )
+
+add_definitions(-DPROJECT_ROOT_PATH="${CMAKE_SOURCE_DIR}")
 
 # Print summary
 message(STATUS "Order Matching Engine Configuration:")
