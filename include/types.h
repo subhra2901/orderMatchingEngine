@@ -52,6 +52,8 @@ struct Order {
     bool is_filled() const { return quantity_filled >= quantity; }
 
     Quantity remaining_qty() const { return quantity - quantity_filled; }
+
+    void reduce_quantity(Quantity qty) { quantity_filled += qty; }
 };
 
 struct Trade {

@@ -3,15 +3,23 @@
 #include <iostream>
 #include <chrono>
 
-#include <../logging/logger.hpp>
+#include "../logging/logger.hpp"
 
-static Logger logger("matching_engine");
-int main(){
-    
 
+int main(int argc, char* argv[]) {
+    auto& logger = Logger::getInstance("MatchingEngineMain");
+
+    for(int i=0; i<argc; i++) {
+        std::string arg(argv[i]);
+        if(arg == "--log-level" && i+1 < argc) {
+            LogLevel level = Logger::stringToLevel(argv[i+1]);
+            logger.setMinLevel(level);
+            i++; // Skip next argument since it's the log level
+        } 
+    }
     MatchingEngine engine;
     
-    LOG_INFO(logger, "Initialized Matching Engine");
+    LOG_INFO("Initialized Matching Engine");
 
     std::cout << "Starting Matching Engine..." << std::endl;
 
@@ -46,7 +54,7 @@ int main(){
 
     engine.printStats();
 
-    LOG_INFO(logger, "Shutting down Matching Engine");
+    LOG_INFO("Shutting down Matching Engine");
 
     return 0;
 

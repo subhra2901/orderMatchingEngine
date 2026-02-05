@@ -4,7 +4,7 @@
 #include <order_book.h>
 #include <unordered_map>
 #include <vector>
-#include<atomic>
+#include <atomic>
 
 class MatchingEngine {
 public:
