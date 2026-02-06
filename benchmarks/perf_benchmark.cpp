@@ -1,25 +1,37 @@
 #include<benchmark/benchmark.h>
 #include <matching_engine.h>
 #include <chrono>
+#include <random>
 
-static MatchingEngine engine;
-
-// Benchmark: Process New Order
 static void BM_ProcessNewOrder(benchmark::State& state) {
-    // Create a sample order
-    for (auto _ : state) {
-        Order order{
-            .id = benchmark::IterationCount(),
-            .symbol = "AAPL",
-            .side = OrderSide::SELL,
-            .type = OrderType::LIMIT,
-            .price = 150.0,
-            .quantity = 100,
-            .timestamp = std::chrono::system_clock::now().time_since_epoch().count()
-        };
-        // engine.process_new_order(order);
-    }
-}
+    MatchingEngine engine;
+    OrderBook& book = engine.get_or_create_order_book("AAPL");
+    Order sell_order{
+        .id = 1,
+        .symbol = "AAPL",
+        .side = OrderSide::SELL,
+        .type = OrderType::LIMIT,
+        .price = 150.0,
+        .quantity = 100,
+        .timestamp = 0
+    };
+    Order buy_order{
+        .id = 2,
+        .symbol = "AAPL",
+        .side = OrderSide::BUY,
+        .type = OrderType::LIMIT,
+        .price = 151.0,
+        .quantity = 50,
+        .timestamp = 0
+    };
 
+    // Benchmark processing new buy orders
+    for (auto _ : state) {
+        engine.process_new_order(sell_order);
+        engine.process_new_order(buy_order);
+    }
+    state.SetItemsProcessed(state.iterations() * 2); // Each iteration processes 2 orders
+}
 BENCHMARK(BM_ProcessNewOrder)->Unit(benchmark::kMicrosecond);
 BENCHMARK_MAIN();
+  
