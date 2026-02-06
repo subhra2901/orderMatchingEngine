@@ -37,7 +37,7 @@ TEST_F (MatchingEngineTest, GetOrCreateOrderBook){
 TEST_F(MatchingEngineTest, ProcessOrderStats){
     OrderBook& book = engine.get_or_create_order_book("AAPL");
     Order order1 = makeOrder(1,"AAPL",OrderSide::SELL,150.0,100);
-    book.add_order(order1);
+    book.add_order(&order1);
     EXPECT_EQ(book.getTotalOrders(),1);
 }
 

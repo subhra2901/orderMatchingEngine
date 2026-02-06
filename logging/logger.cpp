@@ -5,57 +5,71 @@
     #define PROJECT_ROOT_PATH "."
 #endif
 
-Logger::Logger(const std::string& process_name) : proc_name_(process_name) {
-    namespace fs = std::filesystem;
-    fs::path root(PROJECT_ROOT_PATH);
-    fs::path logs_dir = root / "logs";
-    fs::create_directories(logs_dir);
+Logger::Logger(const std::string& process_name) {
+    std::filesystem::path logs_dir = std::filesystem::path(PROJECT_ROOT_PATH) / "logs";
+    std::filesystem::create_directories(logs_dir);
 
-    // Create a unique timestamp for the filename (seconds + ms)
+    // Create unique filename with sub-second timestamp
     auto now = std::chrono::system_clock::now();
-    std::string timestamp = std::format("{:%Y-%m-%d_%H-%M-%OS}", now);
+    std::string ts = std::format("{:%Y-%m-%d_%H-%M-%OS}", now);
+    std::replace(ts.begin(), ts.end(), ':', '-');
     
-    std::replace(timestamp.begin(), timestamp.end(), ':', '-');
+    file_.open(logs_dir / std::format("{}_{}.log", process_name, ts));
 
-    std::string filename = std::format("{}_{}.log", proc_name_, timestamp);
-    file_.open(logs_dir / filename, std::ios::out);
+    // Start the background consumer thread
+    worker_thread_ = std::thread(&Logger::processLogs, this);
 }
 
 Logger::~Logger() {
-    if (file_.is_open()) file_.close();
+    exit_flag_ = true;
+    cv_.notify_all(); // Wake up worker to finish remaining logs
+    if (worker_thread_.joinable()) {
+        worker_thread_.join();
+    }
 }
 
-LogLevel Logger::stringToLevel(std::string str) {
-    for (auto& c : str) c = (char)std::tolower(c);
-    if (str == "debug") return LogLevel::DEBUG;
-    if (str == "warn")  return LogLevel::WARN;
-    if (str == "error") return LogLevel::ERROR;
-    return LogLevel::INFO;
-}
-
-void Logger::log(LogLevel level, const std::string& msg, const std::source_location loc) {
+void Logger::log(LogLevel level, std::string msg, const std::source_location loc) {
     if (level < min_level_) return;
 
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!file_.is_open()) return;
-
     auto now = std::chrono::system_clock::now();
-    
-    
-    std::string_view lvl_str;
-    switch (level) {
-        case LogLevel::DEBUG: lvl_str = "DEBUG"; break;
-        case LogLevel::INFO:  lvl_str = "INFO "; break;
-        case LogLevel::WARN:  lvl_str = "WARN "; break;
-        case LogLevel::ERROR: lvl_str = "ERROR"; break;
-    }
+    std::string_view lvl_str = (level == LogLevel::DEBUG) ? "DEBUG" : 
+                               (level == LogLevel::INFO)  ? "INFO " : 
+                               (level == LogLevel::WARN)  ? "WARN " : "ERROR";
 
-    file_ << std::format("{:%H:%M:%S} | {} | L:{:<4} | {:<20} | {:<15} | {}\n",
-                         now,
-                         lvl_str,
-                         loc.line(),
-                         loc.function_name(),
-                         std::filesystem::path(loc.file_name()).filename().string(),
-                         msg);
-    file_.flush();
+    // Format the string on the PRODUCER thread to capture state immediately
+    std::string formatted = std::format("{:%H:%M:%OS} | {} | L:{:<4} | {:<20} | {:<15} | {}\n",
+                                        now, lvl_str, loc.line(), loc.function_name(),
+                                        std::filesystem::path(loc.file_name()).filename().string(),
+                                        msg);
+
+    // Lock-protected push to the queue
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        log_queue_.push(std::move(formatted));
+    }
+    cv_.notify_one(); // Signal the background thread
+}
+
+void Logger::processLogs() {
+    while (true) {
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        
+        // Wait until there's a message or we are shutting down
+        cv_.wait(lock, [this] { return !log_queue_.empty() || exit_flag_; });
+
+        while (!log_queue_.empty()) {
+            std::string line = std::move(log_queue_.front());
+            log_queue_.pop();
+            
+            // Release lock during I/O to let Producer push more logs
+            lock.unlock(); 
+            if (file_.is_open()) {
+                file_ << line;
+                file_.flush();
+            }
+            lock.lock();
+        }
+
+        if (exit_flag_) break;
+    }
 }

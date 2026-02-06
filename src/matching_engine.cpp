@@ -4,82 +4,94 @@
 #include <../logging/logger.hpp>
 
 std::vector<Trade> MatchingEngine::process_new_order(const Order& incoming_order) {
+    Order* order_ptr = order_pool_.allocate();
+    if (!order_ptr) {
+        LOG_ERROR("Order pool exhausted. Cannot process new order ID: " + std::to_string(incoming_order.id));
+        return {}; // Return empty trade list if pool is exhausted
+    }
+    *order_ptr = incoming_order; // Copy order data into pool
+
     std::vector<Trade> trades;
     // 1. Validate the order
-    if (!validate_order(incoming_order)) {
+    if (!validate_order(*order_ptr)) {
         LOG_ERROR("Order ID: " + std::to_string(incoming_order.id) + " failed validation.");
+        order_pool_.deallocate(order_ptr); // Deallocate the order if validation fails
         return trades; // Return empty trade list on invalid order
     }
     // 2. Get or create the order book for the symbol
     OrderBook& book = get_or_create_order_book(incoming_order.symbol);
     // 3. Match the order against existing orders
-    if (incoming_order.side == OrderSide::BUY) {
-        trades = match_against_sell_orders(book, incoming_order);
+    if (order_ptr->side == OrderSide::BUY) {
+        trades = match_against_sell_orders(book, order_ptr);
     } else {
-        trades = match_against_buy_orders(book, incoming_order);
+        trades = match_against_buy_orders(book, order_ptr);
     }
     // 4. Add the order to the book if not fully filled
-    if (!incoming_order.is_filled()) {
-        book.add_order(incoming_order);
+    if (!order_ptr->is_filled()) {
+        book.add_order(order_ptr);
+        stats_.total_orders++;
+    } else {
+        order_pool_.deallocate(order_ptr); // Deallocate if fully filled
     }
-    // 5. Update stats
-    stats_.total_orders++;
-    // 6 . Return the list of trades executed
+    
+    // 5. Return the list of trades executed
 
     return trades;
 }
 
-std::vector<Trade> MatchingEngine::match_against_buy_orders(OrderBook& book, const Order& sell_order) {
+std::vector<Trade> MatchingEngine::match_against_buy_orders(OrderBook& book, Order* sell_order) {
     std::vector<Trade> trades;
-    Order& sell_order_copy = const_cast<Order&>(sell_order); // Create a modifiable copy
-    while (sell_order_copy.remaining_qty() > 0) {
+ 
+    while (sell_order->remaining_qty() > 0) {
         Order* best_bid = book.getBestBid();
-        if (!best_bid || best_bid->price < sell_order_copy.price) {
+        if (!best_bid || best_bid->price < sell_order->price) {
             break; // No more matching possible
         }
-        Quantity trade_qty = std::min(sell_order_copy.remaining_qty(), best_bid->remaining_qty());
+        Quantity trade_qty = std::min(sell_order->remaining_qty(), best_bid->remaining_qty());
         Price trade_price = best_bid->price;
-        Trade trade = create_trade(*best_bid, sell_order_copy, trade_qty, trade_price);
+        Trade trade = create_trade(best_bid, sell_order, trade_qty, trade_price);
         trades.push_back(trade);
         // Update order quantities
-        sell_order_copy.reduce_quantity(trade_qty);
+        sell_order->reduce_quantity(trade_qty);
         best_bid->reduce_quantity(trade_qty);
         // Remove fully filled orders from the book
         if (best_bid->is_filled()) {
             book.cancel_order(best_bid->id);
+            order_pool_.deallocate(best_bid); // Deallocate the fully filled bid order
         }
-    }
+    }   
     return trades;
 }
 
-std::vector<Trade> MatchingEngine::match_against_sell_orders(OrderBook& book, const Order& buy_order) {
+std::vector<Trade> MatchingEngine::match_against_sell_orders(OrderBook& book, Order* buy_order) {
     std::vector<Trade> trades;
-    Order& buy_order_copy = const_cast<Order&>(buy_order); // Create a modifiable copy
-    while (buy_order_copy.remaining_qty() > 0) {
+    
+    while (buy_order->remaining_qty() > 0) {
         Order* best_ask = book.getBestAsk();
-        if (!best_ask || best_ask->price > buy_order_copy.price) {
+        if (!best_ask || best_ask->price > buy_order->price) {
             break; // No more matching possible
         }
-        Quantity trade_qty = std::min(buy_order_copy.remaining_qty(), best_ask->remaining_qty());
+        Quantity trade_qty = std::min(buy_order->remaining_qty(), best_ask->remaining_qty());
         Price trade_price = best_ask->price;
-        Trade trade = create_trade(buy_order_copy, *best_ask, trade_qty, trade_price);
+        Trade trade = create_trade(buy_order, best_ask, trade_qty, trade_price);
         trades.push_back(trade);
         // Update order quantities
-        buy_order_copy.reduce_quantity(trade_qty);
+        buy_order->reduce_quantity(trade_qty);
         best_ask->reduce_quantity(trade_qty);
         // Remove fully filled orders from the book
         if (best_ask->is_filled()) {
             book.cancel_order(best_ask->id);
+            order_pool_.deallocate(best_ask); // Deallocate the fully filled ask order
         }
     }
     return trades;
 }
 
-Trade MatchingEngine::create_trade(const Order& buy_order, const Order& sell_order, Quantity trade_quantity, Price trade_price) {
+Trade MatchingEngine::create_trade(Order* buy_order, Order* sell_order, Quantity trade_quantity, Price trade_price) {
     Trade trade{
-        .buy_order_id = buy_order.id,
-        .sell_order_id = sell_order.id,
-        .symbol = buy_order.symbol,
+        .buy_order_id = buy_order->id,
+        .sell_order_id = sell_order->id,
+        .symbol = buy_order->symbol,
         .price = trade_price,
         .quantity = trade_quantity,
         .timestamp = std::chrono::system_clock::now().time_since_epoch().count()
@@ -128,6 +140,14 @@ OrderBook* MatchingEngine::get_order_book(const Symbol& symbol) {
         return &it->second;
     }
     return nullptr;
+}
+
+void MatchingEngine::cancel_order(const OrderID& id, const Symbol& symbol) {
+    auto& book = get_or_create_order_book(symbol);
+    Order* ptr = book.cancel_order(id);
+    if (ptr) {
+        order_pool_.deallocate(ptr);
+    }
 }
 
 void MatchingEngine::printStats() const {

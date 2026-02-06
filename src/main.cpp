@@ -12,7 +12,9 @@ int main(int argc, char* argv[]) {
     for(int i=0; i<argc; i++) {
         std::string arg(argv[i]);
         if(arg == "--log-level" && i+1 < argc) {
-            LogLevel level = Logger::stringToLevel(argv[i+1]);
+            LogLevel level = argv[i+1] == "DEBUG" ? LogLevel::DEBUG :
+                             argv[i+1] == "INFO"  ? LogLevel::INFO  :
+                             argv[i+1] == "WARN"  ? LogLevel::WARN  : LogLevel::ERROR;
             logger.setMinLevel(level);
             i++; // Skip next argument since it's the log level
         } 

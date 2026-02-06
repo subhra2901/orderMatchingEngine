@@ -12,7 +12,7 @@ static void BM_ProcessNewOrder(benchmark::State& state) {
         .side = OrderSide::SELL,
         .type = OrderType::LIMIT,
         .price = 150.0,
-        .quantity = 100,
+        .quantity = 10,
         .timestamp = 0
     };
     Order buy_order{
@@ -20,8 +20,8 @@ static void BM_ProcessNewOrder(benchmark::State& state) {
         .symbol = "AAPL",
         .side = OrderSide::BUY,
         .type = OrderType::LIMIT,
-        .price = 151.0,
-        .quantity = 50,
+        .price = 150.0,
+        .quantity = 10,
         .timestamp = 0
     };
 
@@ -32,6 +32,6 @@ static void BM_ProcessNewOrder(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations() * 2); // Each iteration processes 2 orders
 }
-BENCHMARK(BM_ProcessNewOrder)->Unit(benchmark::kMicrosecond);
+BENCHMARK(BM_ProcessNewOrder)->Unit(benchmark::kNanosecond);
 BENCHMARK_MAIN();
   

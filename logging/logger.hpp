@@ -4,38 +4,47 @@
 #include <string>
 #include <fstream>
 #include <mutex>
+#include <queue>
+#include <thread>
+#include <condition_variable>
 #include <filesystem>
 #include <source_location>
 #include <format>
+#include <atomic>
 
 enum class LogLevel { DEBUG = 0, INFO = 1, WARN = 2, ERROR = 3 };
 
 class Logger {
 public:
-    // Singleton access
-    static Logger& getInstance(const std::string& process_name = "Process") {
+    static Logger& getInstance(const std::string& process_name = "OME") {
         static Logger instance(process_name);
         return instance;
     }
 
     void setMinLevel(LogLevel level) { min_level_ = level; }
-    static LogLevel stringToLevel(std::string str);
-
-    // C++20 source_location replaces the need for complex macros
-    void log(LogLevel level, const std::string& msg, 
+    
+    // The main entry point: Pushes to queue, doesn't touch the disk
+    void log(LogLevel level, std::string msg, 
              const std::source_location loc = std::source_location::current());
 
 private:
     explicit Logger(const std::string& process_name);
     ~Logger();
 
-    std::ofstream file_;
-    std::mutex mutex_;
+    void processLogs(); // The background thread function
+
+    // Core Data
     LogLevel min_level_ = LogLevel::INFO;
-    std::string proc_name_;
+    std::ofstream file_;
+    
+    // Async Mechanics
+    std::queue<std::string> log_queue_;
+    std::mutex queue_mutex_;
+    std::condition_variable cv_;
+    std::thread worker_thread_;
+    std::atomic<bool> exit_flag_{false};
 };
 
-// Simplified C++20 Macros
 #define LOG_DEBUG(msg) Logger::getInstance().log(LogLevel::DEBUG, msg)
 #define LOG_INFO(msg)  Logger::getInstance().log(LogLevel::INFO,  msg)
 #define LOG_WARN(msg)  Logger::getInstance().log(LogLevel::WARN,  msg)

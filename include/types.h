@@ -86,8 +86,7 @@ struct L2Quote {
 
 //Internal structures
 struct OrderInfo {
-    OrderSide side;
-    Price price;
-    std::list<Order>::iterator list_it;    
+    Order* order_ptr; //Pointer to the actual order in the order book
+    std::list<Order*>::iterator list_it;    
 };
 

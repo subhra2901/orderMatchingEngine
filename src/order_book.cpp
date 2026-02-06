@@ -9,32 +9,31 @@ OrderBook::OrderBook(const Symbol& symbol) : symbol_(symbol) {
     LOG_INFO("OrderBook created for symbol: " + symbol);
 }
 
-void OrderBook::add_order(const Order& order) {
-    LOG_DEBUG("Adding order ID: " + std::to_string(order.id) + " to OrderBook for symbol: " + symbol_);
+void OrderBook::add_order(Order* order) {
+    LOG_DEBUG("Adding order ID: " + std::to_string(order->id) + " to OrderBook for symbol: " + symbol_);
     
-    auto& price_map = (order.side == OrderSide::BUY) ? buy_orders_ : sell_orders_;
-    auto& orderlist = price_map[order.price];
+    auto& price_map = (order->side == OrderSide::BUY) ? buy_orders_ : sell_orders_;
+    auto& orderlist = price_map[order->price];
 
-    size_t position = orderlist.size();
     orderlist.push_back(order);
 
-    order_lookup_[order.id] = {order.side, order.price, std::prev(orderlist.end())};
+    order_lookup_[order->id] = {order, std::prev(orderlist.end())};
 
-    LOG_DEBUG("Order ID: " + std::to_string(order.id) + " added at price: " + std::to_string(order.price) + 
-              " with position: " + std::to_string(position));
+    LOG_DEBUG("Order ID: " + std::to_string(order->id) + " added at price: " + std::to_string(order->price) + 
+            " with position: " + std::to_string(std::distance(orderlist.begin(), std::prev(orderlist.end()))));
     //1. Add order to appropriate book (buy/sell)
     //2. Update order_lookup_ for quick access
 }
 
-bool OrderBook::cancel_order(const OrderID& order_id) {
+Order* OrderBook::cancel_order(const OrderID& order_id) {
     auto it = order_lookup_.find(order_id);
     if (it == order_lookup_.end()) {
         LOG_WARN("Attempted to cancel non-existent order ID: " + std::to_string(order_id));
-        return false; // Order not found
+        return nullptr; // Order not found
     }
     OrderInfo info = it->second;
-    auto& price_map = (info.side == OrderSide::BUY) ? buy_orders_: sell_orders_;
-    auto orderlist_it = price_map.find(info.price);
+    auto& price_map = (info.order_ptr->side == OrderSide::BUY) ? buy_orders_: sell_orders_;
+    auto orderlist_it = price_map.find(info.order_ptr->price);
     if (orderlist_it != price_map.end()) {
         orderlist_it->second.erase(info.list_it);
         if (orderlist_it->second.empty()) {
@@ -42,23 +41,18 @@ bool OrderBook::cancel_order(const OrderID& order_id) {
         }
         order_lookup_.erase(order_id);
         LOG_INFO("Cancelled order ID: " + std::to_string(order_id));
-        return true;
+        return info.order_ptr; // Return pointer to cancelled order
     }   
-    return false;
+    return nullptr  ;
 }
 
-bool OrderBook::modifyOrderQuantity(const OrderID& order_id, Quantity new_quantity) {
-    // To be implemented
-    //1. Find order 
-    //2. Modify quantity only if reducing
-    return false;
-}
+
 
 Order* OrderBook::getBestBid() {
     if(buy_orders_.empty()) {
         return nullptr;
     }
-    return &buy_orders_.rbegin()->second.front();
+    return buy_orders_.rbegin()->second.front();
     // Return pointer to best bid order
 }
 
@@ -66,7 +60,7 @@ Order* OrderBook::getBestAsk() {
     if(sell_orders_.empty()) {
         return nullptr;
     }
-    return &sell_orders_.begin()->second.front();
+    return sell_orders_.begin()->second.front();
     // Return pointer to best ask order
     
 }
@@ -113,7 +107,7 @@ size_t OrderBook::getSellOrders() const {
     return total;
 }
 size_t OrderBook::getTotalOrders() const {
-    return getBuyOrders() + getSellOrders();
+    return order_lookup_.size();
 }
 
 

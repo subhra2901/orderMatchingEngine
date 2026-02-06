@@ -8,16 +8,18 @@
 #include <memory>
 
 
-
 class OrderBook {
+
+    friend class MatchingEngine; // Allow MatchingEngine to access private members for matching logic
+
 public:
     //Constructor
     explicit OrderBook(const std::string& symbol);
 
     //core methods
-    void add_order(const Order& order);
-    bool cancel_order(const OrderID& order_id);
-    bool modifyOrderQuantity(const OrderID& order_id, Quantity new_quantity);
+    void add_order(Order* order);
+    Order* cancel_order(const OrderID& order_id);
+    
 
     //Query methods
     Order* getBestBid(); //Returns pointer to best bid order
@@ -39,10 +41,10 @@ private:
 
     //Order book structures
     // Buy Orders: Price -> Deque of Orders (sorted descending)
-    std::map<Price, std::list<Order>> buy_orders_;
+    std::map<Price, std::list<Order*>> buy_orders_;
 
     // Sell Orders: Price -> Deque of Orders (sorted ascending)
-    std::map<Price, std::list<Order>> sell_orders_;
+    std::map<Price, std::list<Order*>> sell_orders_;
 
     //Order ID to OrderInfo mapping for quick access
     std::unordered_map<OrderID, OrderInfo> order_lookup_;
@@ -50,8 +52,5 @@ private:
     //Helper methods
     Order* getBestOrder(OrderSide side);
 
-    void addToLookup(const Order& order, OrderSide side, Price price, size_t position);
-
-    bool removeFromLookup(const OrderID& order_id);
 };
 
