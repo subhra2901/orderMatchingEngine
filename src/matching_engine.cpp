@@ -7,9 +7,9 @@ std::vector<Trade> MatchingEngine::process_new_order(const Order& incoming_order
     Order* order_ptr = order_pool_.allocate();
     if (!order_ptr) {
         LOG_ERROR("Order pool exhausted. Cannot process new order ID: " + std::to_string(incoming_order.id));
-        return {}; // Return empty trade list if pool is exhausted
+        return {}; 
     }
-    *order_ptr = incoming_order; // Copy order data into pool
+    *order_ptr = incoming_order; 
 
     std::vector<Trade> trades;
     // 1. Validate the order
@@ -20,6 +20,14 @@ std::vector<Trade> MatchingEngine::process_new_order(const Order& incoming_order
     }
     // 2. Get or create the order book for the symbol
     OrderBook& book = get_or_create_order_book(incoming_order.symbol);
+
+    //Check for sufficient liquidity for IOC and FOK orders
+    if (order_ptr->type == OrderType::FOK && !can_fill_completely(book, *order_ptr)) {
+        LOG_INFO("Order ID: " + std::to_string(incoming_order.id) + " cannot be fully filled. Cancelling.");
+        order_pool_.deallocate(order_ptr); 
+        return trades; 
+    }
+
     // 3. Match the order against existing orders
     if (order_ptr->side == OrderSide::BUY) {
         trades = match_against_sell_orders(book, order_ptr);
@@ -28,6 +36,11 @@ std::vector<Trade> MatchingEngine::process_new_order(const Order& incoming_order
     }
     // 4. Add the order to the book if not fully filled
     if (!order_ptr->is_filled()) {
+        if(order_ptr->type == OrderType::IOC) {
+            LOG_INFO("Order ID: " + std::to_string(incoming_order.id) + " is IOC and not fully filled. Cancelling remaining quantity.");
+            order_pool_.deallocate(order_ptr); // Deallocate the unfilled IOC order
+            return trades; 
+        }
         book.add_order(order_ptr);
         stats_.total_orders++;
     } else {
@@ -123,6 +136,37 @@ bool MatchingEngine::validate_order(const Order& order) {
         return false;
     }
     return true;
+}
+
+bool MatchingEngine::can_fill_completely(const OrderBook& book, const Order& order) {
+    Quantity needed_qty = order.quantity;
+    auto &map = (order.side == OrderSide::BUY) ? book.sell_orders_ : book.buy_orders_;
+    if(OrderSide::BUY == order.side) {
+        for (const auto& [price, orders_at_price] : map) {
+            if (price > order.price) {
+                break; // No more matching possible
+            }
+            for (const auto& o : orders_at_price) {
+                needed_qty -= o->remaining_qty();
+                if (needed_qty <= 0) {
+                    return true; // Sufficient liquidity found
+                }
+            }
+        }
+    } else {
+        for (const auto& [price, orders_at_price] : map) {
+            if (price < order.price) {
+                break; // No more matching possible
+            }
+            for (const auto& o : orders_at_price) {
+                needed_qty -= o->remaining_qty();
+                if (needed_qty <= 0) {
+                    return true; // Sufficient liquidity found
+                }
+            }
+        }
+    }
+    return false; // Not enough liquidity
 }
 
 OrderBook& MatchingEngine::get_or_create_order_book(const Symbol& symbol) {

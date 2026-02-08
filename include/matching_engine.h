@@ -57,4 +57,7 @@ private:
     std::vector<Trade> match_against_sell_orders(OrderBook& book, Order* buy_order);
 
     Trade create_trade(Order* buy_order, Order* sell_order, Quantity trade_quantity, Price trade_price);
+
+    // Liquidity checker
+    bool can_fill_completely(const OrderBook& book, const Order& order);
 };
