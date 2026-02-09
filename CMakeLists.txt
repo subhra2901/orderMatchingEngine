@@ -24,6 +24,8 @@ find_package(Threads REQUIRED)
 add_library(ome
     src/order_book.cpp
     src/matching_engine.cpp
+    src/tcp_server.cpp
+    src/client_gateway.cpp    
     logging/logger.cpp
 )
 target_include_directories(ome PUBLIC include)

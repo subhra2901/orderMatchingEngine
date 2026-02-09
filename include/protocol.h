@@ -14,9 +14,9 @@ enum class MessageType : uint8_t {
 
 //Header for all messages
 struct MessageHeader {
+    uint16_t seq_num; 
     MessageType type;
     uint16_t msg_len;
-    uint16_t seq_num;
 };
 
 //CLIENT -> SERVER: Login Request
