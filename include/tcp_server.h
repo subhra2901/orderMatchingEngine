@@ -3,10 +3,9 @@
 #include <functional>
 #include <atomic>
 
-class TcpServer
-{
+class TcpServer {
 public:
-    using OnMessage = std::function<void(int fd,const char* data, size_t len)>;
+    using OnMessage = std::function<void(int fd, const char* data, size_t len)>;
     using OnConnection = std::function<void(int fd)>;
     using OnDisconnection = std::function<void(int fd)>;
 

@@ -9,27 +9,28 @@
 
 class MatchingEngine {
 public:
-    MatchingEngine() : order_pool_(100000) {} // Pre-allocate pool for 100k orders
+    // Pre-allocate pool for 100k orders
+    MatchingEngine() : order_pool_(100000) {}
 
-    //Main Operations
+    // Main operations
     std::vector<Trade> process_new_order(const Order& order);
 
-    //PreTrade Validations
+    // Pre-trade validations
     bool validate_order(const Order& order);
 
-    //Dealloations
+    // Order management
     void cancel_order(const OrderID& order_id, const Symbol& symbol);
 
-    //orderbook access
+    // Order book access
     OrderBook& get_or_create_order_book(const Symbol& symbol);
     OrderBook* get_order_book(const Symbol& symbol);
 
-    //Query Methods
-    const std::vector<Trade>& getTradeHistory() const{
+    // Query methods
+    const std::vector<Trade>& getTradeHistory() const {
         return trade_history_;
     }
 
-    //Stats
+    // Statistics
     struct Stats {
         std::atomic<uint64_t> total_orders{0};
         std::atomic<uint64_t> total_trades{0};
@@ -39,25 +40,29 @@ public:
     const Stats& getStats() const {
         return stats_;
     }
+
     void printStats() const;
-    void resetStats() ;
+    void resetStats();
+
 private:
-    ObjectPool<Order> order_pool_; // Pool for managing Order objects
-    //OrderBooks mapped by Symbol
+    // Pool for managing Order objects
+    ObjectPool<Order> order_pool_;
+
+    // Order books mapped by Symbol
     std::unordered_map<Symbol, OrderBook> order_books_;
 
-    //Trade History
+    // Trade history
     std::vector<Trade> trade_history_;
 
-    //Engine Stats
+    // Engine statistics
     Stats stats_;
 
-    //Helper Methods
-    std::vector<Trade> match_against_buy_orders(OrderBook& book,Order* sell_order);
+    // Helper methods
+    std::vector<Trade> match_against_buy_orders(OrderBook& book, Order* sell_order);
     std::vector<Trade> match_against_sell_orders(OrderBook& book, Order* buy_order);
 
     Trade create_trade(Order* buy_order, Order* sell_order, Quantity trade_quantity, Price trade_price);
 
-    // Liquidity checker
+    // Check if order can be completely filled
     bool can_fill_completely(const OrderBook& book, const Order& order);
 };

@@ -9,12 +9,14 @@ enum class MessageType : uint8_t {
     LOGIN_RESPONSE = 'R',
     NEW_ORDER = 'N',
     EXECUTION_REPORT = 'E',
-    ClIENT_DISCONNECT = 'X' 
+    MARKET_DATA_REQUEST = 'M',
+    MARKET_DATA_SNAPSHOT = 'S',
+    CLIENT_DISCONNECT = 'X'
 };
 
 //Header for all messages
 struct MessageHeader {
-    uint16_t seq_num; 
+    uint16_t seq_num;
     MessageType type;
     uint16_t msg_len;
 };
@@ -30,17 +32,36 @@ struct NewOrderRequest {
     MessageHeader header;
     uint64_t client_order_id;
     char symbol[10];
-    uint8_t side; // 0=Buy, 1=Sell
-    uint8_t type; // 0=Market, 1=Limit
-    double price; // Only for Limit orders
+    uint8_t side;           // 0=Buy, 1=Sell
+    uint8_t type;           // 0=Market, 1=Limit
+    double price;           // Only for Limit orders
     uint64_t quantity;
 };
 
 //SERVER -> CLIENT: Login Response
 struct LoginResponse {
     MessageHeader header;
-    uint8_t status; // 0=Fail, 1=Success
-    char message[50]; // Optional message
+    uint8_t status;           // 0=Fail, 1=Success
+    char message[50];         // Optional message
+};
+
+struct MarketDataRequest {
+    MessageHeader header;
+    char symbol[10];
+};
+
+struct L2Entry {
+    double price;
+    uint64_t quantity;
+};
+
+struct MarketDataSnapshot {
+    MessageHeader header;
+    char symbol[10];
+    uint32_t num_bids;
+    uint32_t num_asks;
+    L2Entry bids[5];         // Top 5 bids
+    L2Entry asks[5];         // Top 5 asks
 };
 
 struct ExecutionReport {
@@ -48,11 +69,11 @@ struct ExecutionReport {
     uint64_t client_order_id;
     uint64_t execution_id;
     char symbol[10];
-    uint8_t side; // 0=Buy, 1=Sell
+    uint8_t side;             // 0=Buy, 1=Sell
     double price;
     uint64_t quantity;
     uint64_t filled_quantity;
-    uint8_t status; // 0=New, 1=Partially Filled, 2=Filled, 3=Canceled
+    uint8_t status;           // 0=New, 1=Partially Filled, 2=Filled, 3=Canceled
 };
 
 #pragma pack(pop)

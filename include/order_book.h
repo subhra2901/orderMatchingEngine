@@ -7,50 +7,47 @@
 #include <vector>
 #include <memory>
 
-
 class OrderBook {
-
-    friend class MatchingEngine; // Allow MatchingEngine to access private members for matching logic
+    friend class MatchingEngine;  // Allow MatchingEngine to access private members
 
 public:
-    //Constructor
+    // Constructor
     explicit OrderBook(const std::string& symbol);
 
-    //core methods
+    // Core methods
     void add_order(Order* order);
     Order* cancel_order(const OrderID& order_id);
-    
 
-    //Query methods
-    Order* getBestBid(); //Returns pointer to best bid order
-    Order* getBestAsk(); //Returns pointer to best ask order
-    Price getSpread(); //Returns the spread between best ask and best bid
+    // Query methods
+    Order* getBestBid();         // Returns pointer to best bid order
+    Order* getBestAsk();         // Returns pointer to best ask order
+    Price getSpread();           // Returns the spread between best ask and best bid
 
-    //Market data methods
+    // Market data methods
     L1Quote getL1Quote();
-    L2Quote getL2Quote(size_t depth=10) const;
+    L2Quote getL2Quote(size_t depth = 10) const;
 
-    //Stats
+    // Statistics
     size_t getTotalOrders() const;
     size_t getBuyOrders() const;
     size_t getSellOrders() const;
 
-    Symbol getSymbol() const{ return symbol_; }
+    Symbol getSymbol() const { return symbol_; }
+
 private:
     Symbol symbol_;
 
-    //Order book structures
-    // Buy Orders: Price -> Deque of Orders (sorted descending)
+    // Order book structures
+    // Buy Orders: Price -> List of Orders (sorted descending)
     std::map<Price, std::list<Order*>> buy_orders_;
 
-    // Sell Orders: Price -> Deque of Orders (sorted ascending)
+    // Sell Orders: Price -> List of Orders (sorted ascending)
     std::map<Price, std::list<Order*>> sell_orders_;
 
-    //Order ID to OrderInfo mapping for quick access
+    // Order ID to OrderInfo mapping for quick access
     std::unordered_map<OrderID, OrderInfo> order_lookup_;
 
-    //Helper methods
+    // Helper methods
     Order* getBestOrder(OrderSide side);
-
 };
 
