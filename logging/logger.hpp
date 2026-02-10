@@ -22,6 +22,13 @@ public:
     }
 
     void setMinLevel(LogLevel level) { min_level_ = level; }
+
+    void setMinLevel(const std::string& level_str) {
+        if (level_str == "DEBUG") min_level_ = LogLevel::DEBUG;
+        else if (level_str == "INFO") min_level_ = LogLevel::INFO;
+        else if (level_str == "WARN") min_level_ = LogLevel::WARN;
+        else if (level_str == "ERROR") min_level_ = LogLevel::ERROR;
+    }
     
     // The main entry point: Pushes to queue, doesn't touch the disk
     void log(LogLevel level, std::string msg, 
