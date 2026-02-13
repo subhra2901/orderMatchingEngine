@@ -1,12 +1,12 @@
 #pragma once
 
-#include <vector>
-#include <cstddef>  // for size_t
 #include <cassert>
+#include <cstddef> // for size_t
+#include <vector>
 
-template <typename T>
-class ObjectPool {
-public:
+
+template <typename T> class ObjectPool {
+  public:
     // Constructor to initialize the pool with a specified size
     explicit ObjectPool(size_t pool_size) {
         pool_.reserve(pool_size);
@@ -20,9 +20,9 @@ public:
      * Allocate an object from the pool.
      * @return Pointer to allocated object, or nullptr if pool is exhausted.
      */
-    T* allocate() {
+    T *allocate() {
         if (free_indices_.empty()) {
-            return nullptr;  // Pool exhausted
+            return nullptr; // Pool exhausted
         }
         size_t index = free_indices_.back();
         free_indices_.pop_back();
@@ -33,9 +33,9 @@ public:
      * Return an object to the pool.
      * @param obj Pointer to object to deallocate.
      */
-    void deallocate(T* obj) {
+    void deallocate(T *obj) {
         size_t index = obj - &pool_[0];
-        assert(index < pool_.size());  // Ensure the object belongs to the pool
+        assert(index < pool_.size()); // Ensure the object belongs to the pool
         free_indices_.push_back(index);
     }
 
@@ -55,7 +55,7 @@ public:
         return pool_.size();
     }
 
-private:
+  private:
     std::vector<T> pool_;              // Pre-allocated objects
     std::vector<size_t> free_indices_; // Stack of free indices
-};  
+};

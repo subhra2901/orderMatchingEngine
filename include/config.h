@@ -1,27 +1,27 @@
 #pragma once
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
 #include <string>
 #include <vector>
-#include <cstdlib>
-#include <iostream>
-#include <filesystem>
+
 
 class Config {
-public:
-    static Config& getInstance() {
+  public:
+    static Config &getInstance() {
         static Config instance;
         return instance;
     }
 
-    Config(const Config&) = delete;
-    Config& operator=(const Config&) = delete;
+    Config(const Config &)            = delete;
+    Config &operator=(const Config &) = delete;
 
-    //Default values
-    int port = 8080;
+    // Default values
+    int port              = 8080;
     std::string log_level = "INFO";
-    bool replay_mode = false;
-   
+    bool replay_mode      = false;
 
-    void parseArgs(int argc, char* argv[]) {
+    void parseArgs(int argc, char *argv[]) {
         for (int i = 0; i < argc; i++) {
             std::string arg(argv[i]);
             if (arg == "--port" && i + 1 < argc) {
@@ -32,13 +32,13 @@ public:
                 i++;
             } else if (arg == "--replay-mode") {
                 replay_mode = true;
-            }
-            else if (arg == "--help"){
-                printHelp() ;
+            } else if (arg == "--help") {
+                printHelp();
             }
         }
     }
-private:
+
+  private:
     Config() = default;
     void printHelp() {
         std::cout << "Usage: matching_engine [options]\n"

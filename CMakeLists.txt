@@ -28,7 +28,7 @@ add_library(ome
     src/client_gateway.cpp    
     logging/logger.cpp
 )
-target_include_directories(ome PUBLIC include)
+target_include_directories(ome PUBLIC include logging)
 target_compile_features(ome PUBLIC cxx_std_20)
 
 # Main executable

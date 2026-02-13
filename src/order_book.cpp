@@ -5,135 +5,129 @@
 #include <../logging/logger.hpp>
 
 OrderBook::OrderBook(const Symbol &symbol) : symbol_(symbol) {
-  LOG_INFO("OrderBook created for symbol: " + symbol);
+    LOG_INFO << "OrderBook created for symbol: " << symbol;
 }
 
 void OrderBook::add_order(Order *order) {
-  LOG_DEBUG("Adding order ID: " + std::to_string(order->id) +
-            " to OrderBook for symbol: " + symbol_);
+    LOG_DEBUG << "Adding order ID: " << order->id << " to OrderBook for symbol: " << symbol_;
 
-  auto &price_map =
-      (order->side == OrderSide::BUY) ? buy_orders_ : sell_orders_;
-  auto &orderlist = price_map[order->price];
+    auto &price_map = (order->side == OrderSide::BUY) ? buy_orders_ : sell_orders_;
+    auto &orderlist = price_map[order->price];
 
-  orderlist.push_back(order);
+    orderlist.push_back(order);
 
-  order_lookup_[order->id] = {order, std::prev(orderlist.end())};
+    order_lookup_[order->id] = {order, std::prev(orderlist.end())};
 
-  LOG_DEBUG("Order ID: " + std::to_string(order->id) + " added at price: " +
-            std::to_string(order->price) + " with position: " +
-            std::to_string(
-                std::distance(orderlist.begin(), std::prev(orderlist.end()))));
-  // 1. Add order to appropriate book (buy/sell)
-  // 2. Update order_lookup_ for quick access
+    LOG_DEBUG << "Order ID: " << order->id << " added at price: " << order->price
+              << " with position: " << std::distance(orderlist.begin(), std::prev(orderlist.end()));
+    // 1. Add order to appropriate book (buy/sell)
+    // 2. Update order_lookup_ for quick access
 }
 
 Order *OrderBook::cancel_order(const OrderID &order_id) {
-  auto it = order_lookup_.find(order_id);
-  if (it == order_lookup_.end()) {
-    LOG_WARN("Attempted to cancel non-existent order ID: " +
-             std::to_string(order_id));
-    return nullptr; // Order not found
-  }
-  OrderInfo info = it->second;
-  auto &price_map =
-      (info.order_ptr->side == OrderSide::BUY) ? buy_orders_ : sell_orders_;
-  auto orderlist_it = price_map.find(info.order_ptr->price);
-  if (orderlist_it != price_map.end()) {
-    orderlist_it->second.erase(info.list_it);
-    if (orderlist_it->second.empty()) {
-      price_map.erase(orderlist_it);
+    auto it = order_lookup_.find(order_id);
+    if (it == order_lookup_.end()) {
+        LOG_WARN << "Attempted to cancel non-existent order ID: " << order_id;
+        return nullptr; // Order not found
     }
-    order_lookup_.erase(order_id);
-    LOG_INFO("Cancelled order ID: " + std::to_string(order_id));
-    return info.order_ptr; // Return pointer to cancelled order
-  }
-  return nullptr;
+    OrderInfo info    = it->second;
+    auto &price_map   = (info.order_ptr->side == OrderSide::BUY) ? buy_orders_ : sell_orders_;
+    auto orderlist_it = price_map.find(info.order_ptr->price);
+    if (orderlist_it != price_map.end()) {
+        orderlist_it->second.erase(info.list_it);
+        if (orderlist_it->second.empty()) {
+            price_map.erase(orderlist_it);
+        }
+        order_lookup_.erase(order_id);
+        LOG_INFO << "Cancelled order ID: " << order_id;
+        return info.order_ptr; // Return pointer to cancelled order
+    }
+    return nullptr;
 }
 
 Order *OrderBook::getBestBid() {
-  if (buy_orders_.empty()) {
-    return nullptr;
-  }
-  return buy_orders_.rbegin()->second.front();
-  // Return pointer to best bid order
+    if (buy_orders_.empty()) {
+        return nullptr;
+    }
+    return buy_orders_.rbegin()->second.front();
+    // Return pointer to best bid order
 }
 
 Order *OrderBook::getBestAsk() {
-  if (sell_orders_.empty()) {
-    return nullptr;
-  }
-  return sell_orders_.begin()->second.front();
-  // Return pointer to best ask order
+    if (sell_orders_.empty()) {
+        return nullptr;
+    }
+    return sell_orders_.begin()->second.front();
+    // Return pointer to best ask order
 }
 
 Price OrderBook::getSpread() {
-  // TODO: Implement this method
-  // Return ask - bid (0 if no bids or asks)
-  Order *best_bid = getBestBid();
-  Order *best_ask = getBestAsk();
-  if (best_bid && best_ask) {
-    return best_ask->price - best_bid->price;
-  }
-  return 0.0;
+    // TODO: Implement this method
+    // Return ask - bid (0 if no bids or asks)
+    Order *best_bid = getBestBid();
+    Order *best_ask = getBestAsk();
+    if (best_bid && best_ask) {
+        return best_ask->price - best_bid->price;
+    }
+    return 0.0;
 }
 
 L1Quote OrderBook::getL1Quote() {
-  L1Quote quote;
-  Order *best_bid = getBestBid();
-  Order *best_ask = getBestAsk();
-  quote.bid = best_bid ? best_bid->price : 0.0;
-  quote.bid_qty = best_bid ? best_bid->remaining_qty() : 0;
-  quote.ask = best_ask ? best_ask->price : 0.0;
-  quote.ask_qty = best_ask ? best_ask->remaining_qty() : 0;
-  return quote;
+    L1Quote quote;
+    Order *best_bid = getBestBid();
+    Order *best_ask = getBestAsk();
+    quote.bid       = best_bid ? best_bid->price : 0.0;
+    quote.bid_qty   = best_bid ? best_bid->remaining_qty() : 0;
+    quote.ask       = best_ask ? best_ask->price : 0.0;
+    quote.ask_qty   = best_ask ? best_ask->remaining_qty() : 0;
+    return quote;
 }
 
 L2Quote OrderBook::getL2Quote(size_t depth) const {
-  L2Quote quote;
-  quote.bids.reserve(depth);
-  quote.asks.reserve(depth);
-  // Get top N levels of bids
-  size_t count = 0;
-  for (auto it = buy_orders_.rbegin();
-       it != buy_orders_.rend() && count < depth; ++it) {
-    Price price = it->first;
-    Quantity total_qty = 0;
-    for (const auto &order : it->second) {
-      total_qty += order->remaining_qty();
+    L2Quote quote;
+    quote.bids.reserve(depth);
+    quote.asks.reserve(depth);
+    // Get top N levels of bids
+    size_t count = 0;
+    for (auto it = buy_orders_.rbegin(); it != buy_orders_.rend() && count < depth; ++it) {
+        Price price        = it->first;
+        Quantity total_qty = 0;
+        for (const auto &order : it->second) {
+            total_qty += order->remaining_qty();
+        }
+        quote.bids.emplace_back(price, total_qty);
+        count++;
     }
-    quote.bids.emplace_back(price, total_qty);
-    count++;
-  }
 
-  // Get top N levels of asks
-  count = 0;
-  for (auto it = sell_orders_.begin();
-       it != sell_orders_.end() && count < depth; ++it) {
-    Price price = it->first;
-    Quantity total_qty = 0;
-    for (const auto &order : it->second) {
-      total_qty += order->remaining_qty();
+    // Get top N levels of asks
+    count = 0;
+    for (auto it = sell_orders_.begin(); it != sell_orders_.end() && count < depth; ++it) {
+        Price price        = it->first;
+        Quantity total_qty = 0;
+        for (const auto &order : it->second) {
+            total_qty += order->remaining_qty();
+        }
+        quote.asks.emplace_back(price, total_qty);
+        count++;
     }
-    quote.asks.emplace_back(price, total_qty);
-    count++;
-  }
 
-  return quote;
+    return quote;
 }
 
 size_t OrderBook::getBuyOrders() const {
-  size_t total = 0;
-  for (const auto &[price, orders] : buy_orders_) {
-    total += orders.size();
-  }
-  return total;
+    size_t total = 0;
+    for (const auto &[price, orders] : buy_orders_) {
+        total += orders.size();
+    }
+    return total;
 }
 size_t OrderBook::getSellOrders() const {
-  size_t total = 0;
-  for (const auto &[price, orders] : sell_orders_) {
-    total += orders.size();
-  }
-  return total;
+    size_t total = 0;
+    for (const auto &[price, orders] : sell_orders_) {
+        total += orders.size();
+    }
+    return total;
 }
-size_t OrderBook::getTotalOrders() const { return order_lookup_.size(); }
+size_t OrderBook::getTotalOrders() const {
+    return order_lookup_.size();
+}

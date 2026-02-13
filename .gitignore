@@ -29,3 +29,5 @@ Thumbs.db
 .cache/
 logs/
 bins/
+.clang-format
+.editorconfig
