@@ -98,7 +98,7 @@ struct OrderCancelRequest {
     MessageHeader header;
     uint64_t client_order_id;
     char symbol[10];
-    int side; // 0=Buy, 1=Sell
+    uint8_t side; // 0=Buy, 1=Sell
 };
 
 #pragma pack(pop)

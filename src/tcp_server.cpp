@@ -37,7 +37,7 @@ void TcpServer::start() {
     std::vector<int> clients;
     char buffer[1024];
 
-    std::cout << "Server started on port " << port_ << std::endl;
+    LOG_INFO << "Server started on port " << port_;
 
     while (running_) {
         fd_set fds;
@@ -59,7 +59,7 @@ void TcpServer::start() {
         if (FD_ISSET(serverFd_, &fds)) {
             int new_client = accept(serverFd_, nullptr, nullptr);
             if (new_client >= 0) {
-                std::cout << "New client connected: " << new_client << std::endl;
+                LOG_INFO << "New client connected: " << new_client;
                 fcntl(new_client, F_SETFL, O_NONBLOCK);
                 clients.push_back(new_client);
                 if (onConnection_) {
@@ -71,8 +71,8 @@ void TcpServer::start() {
             int client_fd = *it;
             if (FD_ISSET(client_fd, &fds)) {
                 ssize_t bytes_read = recv(client_fd, buffer, sizeof(buffer), 0);
-                std::cout << "Received data from client " << client_fd << ": " << bytes_read
-                          << " bytes" << std::endl;
+                LOG_DEBUG << "Received data from client " << client_fd << ": " << bytes_read
+                          << " bytes";
                 if (bytes_read > 0) {
                     if (onMessage_) {
                         onMessage_(client_fd, buffer, bytes_read);

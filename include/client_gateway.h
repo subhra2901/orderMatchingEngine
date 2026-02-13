@@ -41,10 +41,14 @@ class ClientGateway {
     void broadcastTradeUpdate(const Trade &update);
     void handleOrderCancel(int fd, const OrderCancelRequest &req);
 
+    void processPacket(int fd, const char* data);
+
     // Session information
     struct Session {
+        int fd;
         bool logged_in = false;
         int user_id    = 0;
+        std::vector<char>buffer;
     };
 
     TcpServer &server_;

@@ -1,5 +1,6 @@
 #include <../logging/logger.hpp>
 #include <algorithm>
+#include <chrono>
 #include <client_gateway.h>
 #include <config.h>
 #include <cstring>
@@ -33,7 +34,7 @@ ClientGateway::ClientGateway(MatchingEngine &engine, TcpServer &server)
 void ClientGateway::onConnection(int fd) {
     LOG_INFO << "Client connected: " << fd;
     sessions_[fd] = Session();
-    std::cout << "Client " << fd << " connected" << std::endl;
+    // connection logged above
 }
 
 void ClientGateway::onDisconnection(int fd) {
@@ -43,17 +44,39 @@ void ClientGateway::onDisconnection(int fd) {
     for (auto &[symbol, subscribers] : market_data_subscriptions_) {
         subscribers.erase(fd);
     }
-    std::cout << "Client " << fd << " disconnected" << std::endl;
+    // disconnection logged above
 }
 
 void ClientGateway::onMessage(int fd, const char *data, size_t len) {
-    std::cout << "Processing message from client " << fd << std::endl;
-    if (len < sizeof(MessageHeader)) {
-        LOG_WARN << "Received message too short from client " << fd;
-        return;
-    }
-    auto *header = reinterpret_cast<const MessageHeader *>(data);
+    auto &session = sessions_[fd];
+    session.buffer.insert(session.buffer.end(), data, data + len);
+    while (true) {
+        if (session.buffer.size() < sizeof(MessageHeader)) {
+            break;
+        }
 
+        // processing packet(s) from client
+
+        auto *header = reinterpret_cast<const MessageHeader *>(session.buffer.data());
+
+        if (header->msg_len > 1024 || header->msg_len < sizeof(MessageHeader)) {
+            LOG_ERROR << "Client " << fd << " sent invalid length: " << header->msg_len;
+            return;
+        }
+
+        if (session.buffer.size() < header->msg_len) {
+            break;
+        }
+        std::vector<char> msg_data(session.buffer.begin(),
+                                   session.buffer.begin() + header->msg_len);
+
+        processPacket(fd, msg_data.data());
+        session.buffer.erase(session.buffer.begin(), session.buffer.begin() + header->msg_len);
+    }
+}
+
+void ClientGateway::processPacket(int fd, const char *data) {
+    const auto *header = reinterpret_cast<const MessageHeader *>(data);
     if (header->type == MessageType::LOGIN_REQUEST) {
         auto *req = reinterpret_cast<const LoginRequest *>(data);
         handleLogin(fd, *req);
@@ -155,12 +178,23 @@ void ClientGateway::handleNewOrderInternal(const NewOrderRequest &req, int user_
     if (!is_replay) {
         LOG_INFO << "Processing new order from client " << fd << ": " << order.id;
     }
-
-    auto trades = engine_.process_new_order(order);
-
+    auto start_time = std::chrono::high_resolution_clock::now();
+    auto trades     = engine_.process_new_order(order);
+    auto end_time   = std::chrono::high_resolution_clock::now();
+    auto latency_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     if (is_replay) {
         LOG_DEBUG << "Replayed order " << order.id << " resulted in " << trades.size() << " trades";
         return; // Don't send execution reports for replayed orders
+    }
+
+    double latency_us = latency_ns / 1000.0;
+    LOG_INFO << "Order " << order.id << " Matched in: " << latency_ns << " ns (" << latency_us
+             << " us)";
+
+    // Alert on "Slow" orders (e.g., > 100us is slow for a C++ engine)
+    if (latency_us > 100.0) {
+        LOG_WARN << "SLOW MATCH DETECTED: " << latency_us << " us";
     }
 
     if (!trades.empty()) {

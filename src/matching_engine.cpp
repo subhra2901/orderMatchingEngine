@@ -123,6 +123,8 @@ Trade MatchingEngine::create_trade(Order *buy_order, Order *sell_order, Quantity
     stats_.total_volume += trade_quantity;
     // Add to trade history
     trade_history_.push_back(trade);
+    LOG_DEBUG << "Trade executed: " << trade.quantity << "@" << trade.price << " symbol "
+              << trade.symbol << " buy:" << trade.buy_order_id << " sell:" << trade.sell_order_id;
     return trade;
 }
 
@@ -137,13 +139,11 @@ bool MatchingEngine::validate_order(const Order &order) {
         return false;
     }
     if (order.type == OrderType::LIMIT && order.price <= 0.0) {
-        LOG_ERROR << "Invalid limit order price: " + std::to_string(order.price)
-                  << " for order ID: " << std::to_string(order.id);
+        LOG_ERROR << "Invalid limit order price: " << order.price << " for order ID: " << order.id;
         return false;
     }
     if (order.price < 0.0) {
-        LOG_ERROR << "Invalid order price: " << std::to_string(order.price)
-                  << " for order ID: " << std::to_string(order.id);
+        LOG_ERROR << "Invalid order price: " << order.price << " for order ID: " << order.id;
         return false;
     }
     return true;
@@ -210,10 +210,10 @@ std::optional<Order> MatchingEngine::cancel_order(const OrderID &id, const Symbo
 }
 
 void MatchingEngine::printStats() const {
-    std::cout << "=== Matching Engine Stats ===\n";
-    std::cout << "Total Orders: " << stats_.total_orders.load() << std::endl;
-    std::cout << "Total Trades: " << stats_.total_trades.load() << std::endl;
-    std::cout << "Total Volume: " << stats_.total_volume.load() << std::endl;
+    LOG_INFO << "=== Matching Engine Stats ===";
+    LOG_INFO << "Total Orders: " << stats_.total_orders.load();
+    LOG_INFO << "Total Trades: " << stats_.total_trades.load();
+    LOG_INFO << "Total Volume: " << stats_.total_volume.load();
 }
 
 void MatchingEngine::resetStats() {

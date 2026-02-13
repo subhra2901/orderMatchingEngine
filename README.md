@@ -41,204 +41,96 @@ The Order Matching Engine is a multi-threaded matching engine designed to handle
 │   └── perf_benchmark.cpp
 ├── client/                  # Python client
 │   └── s_client.py         # Simple TCP client for testing
-├── CMakeLists.txt          # CMake build configuration
-└── README.md               # This file
+# Order Matching Engine
+
+High-performance C++ order matching engine with a TCP gateway and a small Python client for testing.
+
+## Overview
+
+- Core matching engine implementing price-time priority matching
+- Per-symbol order books with L1/L2 market data snapshots
+- TCP client gateway for binary protocol
+- Memory pooling for reduced allocations and higher throughput
+- Streaming logging macros (example: `LOG_INFO << "msg" << value;`)
+
+## Project Layout
+
+```
+. 
+├── include/        # Headers (protocol, types, engine API)
+├── src/            # Implementation (engine, books, gateway, server)
+├── logging/        # Logger implementation
+├── tests/          # Unit tests
+├── benchmarks/     # Performance tests
+├── client/         # Python test client
+├── CMakeLists.txt  # Build
+└── README.md       # This file
 ```
 
-## Building
+## Build
 
-### Prerequisites
-
-- C++20 compiler (GCC/Clang)
-- CMake 3.20+
-- Google Test (for tests)
-- Google Benchmark (for benchmarks)
-
-### Build Instructions
+Requirements: C++20 toolchain, CMake 3.20+, clang-format (optional), gtest for tests.
 
 ```bash
-# Create build directory
-mkdir build
-cd build
-
-# Configure and build
+mkdir -p build && cd build
 cmake ..
-make
-
-# Build all targets
-make all
+cmake --build . --config Release
+# Binaries: build/ome_main, build/test_ome, build/bench_ome
 ```
 
-### Build Targets
+## Run
 
-- `ome_main`: Main server executable
-- `test_ome`: Unit tests
-- `bench_ome`: Performance benchmarks
-
-## Running the Server
-
-Start the server on default port 8080:
+Start server (default port 8080):
 
 ```bash
 ./build/ome_main
 ```
 
-Start on a custom port:
+See `src/main.cpp` for available CLI flags (replay, log level, etc.).
 
-```bash
-./build/ome_main 9000
+## Formatting
+
+- Recommended formatter: `clang-format` with a project `.clang-format` and `.editorconfig`.
+- VSCode: set `editor.tabSize` to `4` and `editor.insertSpaces` = `true`.
+
+Example command to format all source files with `clang-format` (PowerShell):
+
+```powershell
+Get-ChildItem -Path 'src','include','tests','logging','benchmarks' -Include '*.cpp','*.h' -Recurse |
+	ForEach-Object { clang-format -i -style=file $_.FullName }
 ```
 
-With custom log level:
+## Logging
 
-```bash
-./build/ome_main 8080 --log-level DEBUG
+- Logging uses streaming macros to avoid intermediate string allocations and to improve readability.
+- Example: `LOG_WARN << "Client " << fd << " not logged in";`.
+
+## Stress Test Result (baseline)
+
+Provided stress test (used as baseline for tuning):
+
+```
+=== LAUNCHING STRESS TEST ===
+Target: 127.0.0.1:8080
+Threads: 5 | Orders/Thread: 2000
+Total Orders: 10000
+--------------------------------
+[Client 1] Finished. 2000 orders in 0.59s (3413 orders/sec)
+[Client 3] Finished. 2000 orders in 0.60s (3353 orders/sec)
+[Client 4] Finished. 2000 orders in 0.60s (3318 orders/sec)
+[Client 5] Finished. 2000 orders in 0.60s (3315 orders/sec)
+[Client 2] Finished. 2000 orders in 0.61s (3303 orders/sec)
+--------------------------------
+=== TEST COMPLETE ===
+Total Time: 0.7087 seconds
+Throughput: 14111 ORDERS PER SECOND.
 ```
 
-## Running Tests
+Use this result to compare changes in lock strategy, thread counts, batching, and allocator sizing.
 
-```bash
-cd build
-ctest
-```
+## Tests & Benchmarks
 
-Or run the test executable directly:
+- Unit tests: `build/test_ome`
+- Benchmarks: `build/bench_ome`
 
-```bash
-./build/test_ome
-```
-
-## Running Benchmarks
-
-```bash
-./build/bench_ome
-```
-
-## Protocol
-
-The server communicates using a binary protocol. See [protocol.h](include/protocol.h) for detailed message structures.
-
-### Message Types
-
-| Type | Code | Direction | Purpose |
-|------|------|-----------|---------|
-| LOGIN_REQUEST | 'L' | Client → Server | User authentication |
-| LOGIN_RESPONSE | 'R' | Server → Client | Authentication response |
-| NEW_ORDER | 'N' | Client → Server | Submit new order |
-| EXECUTION_REPORT | 'E' | Server → Client | Order execution notification |
-| MARKET_DATA_REQUEST | 'M' | Client → Server | Request market data |
-| MARKET_DATA_SNAPSHOT | 'S' | Server → Client | Market data response |
-| CLIENT_DISCONNECT | 'X' | Client → Server | Disconnect notification |
-
-## Python Client
-
-A simple Python client is provided for testing and interaction.
-
-### Usage
-
-```bash
-python client/s_client.py
-```
-
-The client:
-1. Connects to the server on localhost:8080
-2. Sends a login request
-3. Places a new order for AAPL
-4. Requests market data
-5. Displays execution reports and market data updates
-
-## Data Types
-
-### Order Sides
-- `BUY` (0): Buy order
-- `SELL` (1): Sell order
-
-### Order Types
-- `LIMIT` (0): Execute at specific price or better
-- `MARKET` (1): Execute immediately at best available price
-- `FOK` (2): Fill or Kill - all or nothing
-- `IOC` (3): Immediate or Cancel
-- `GFD` (4): Good for Day
-
-### Order Status
-- `NEW` (0): Order is new
-- `PARTIAL` (1): Order has been partially executed
-- `FILLED` (2): Order has been completely executed
-- `CANCELLED` (3): Order has been cancelled
-
-## Features
-
-### High Performance
-- Single-threaded matching logic for deterministic ordering
-- Memory pooling to reduce allocations
-- Optimized data structures (maps, lists)
-- Compile-time optimizations (-O3, LTO, architecture-specific flags)
-
-### Robustness
-- Comprehensive logging system
-- Error handling and validation
-- L1 and L2 market data support
-- Multiple order types (Market, Limit, FOK, IOC, GFD)
-
-### Scalability
-- TCP multi-threaded server
-- Efficient memory management
-- Thread-safe operations
-
-## Configuration
-
-### CMakeLists.txt Settings
-
-- `CMAKE_BUILD_TYPE`: Release (optimized)
-- `CMAKE_CXX_STANDARD`: 20
-- `CMAKE_CXX_FLAGS_RELEASE`: `-O3 -march=native -DNDEBUG -flto`
-
-### Logging Levels
-
-Available log levels (from least to most verbose):
-- `ERROR`: Error messages only
-- `WARN`: Warnings and errors
-- `INFO`: General information
-- `DEBUG`: Detailed debug information
-
-## Technical Details
-
-### Matching Algorithm
-
-The matching engine uses a price-time priority matching algorithm:
-1. Orders are organized in a map by price level
-2. Within each price level, orders are maintained in FIFO order
-3. Buy orders are sorted in descending price order
-4. Sell orders are sorted in ascending price order
-
-### Market Data
-
-- **L1Quote**: Best bid/ask prices and quantities
-- **L2Quote**: Top N price levels (default 10 levels) with bid/ask quantities
-
-## Performance
-
-Expected performance metrics (on modern hardware):
-
-- Order placement: < 100 microseconds
-- Order matching: < 50 microseconds  
-- Market data updates: < 25 microseconds
-
-(Actual performance depends on hardware and load)
-
-## Future Enhancements
-
-- [ ] Additional order types (stop, trail)
-- [ ] Advanced matching algorithms
-- [ ] Multi-symbol support optimization
-- [ ] Persistence layer
-- [ ] Web API interface
-- [ ] Real-time metrics/analytics
-
-## License
-
-Proprietary - All rights reserved
-
-## Author
-
-Order Matching Engine Development Team
+For design details see DESIGN.md
