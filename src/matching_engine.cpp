@@ -1,6 +1,7 @@
 #include <../logging/logger.hpp>
 #include <chrono>
 #include <iostream>
+#include <optional>
 #include <matching_engine.h>
 
 std::vector<Trade>
@@ -205,12 +206,15 @@ OrderBook *MatchingEngine::get_order_book(const Symbol &symbol) {
   return nullptr;
 }
 
-void MatchingEngine::cancel_order(const OrderID &id, const Symbol &symbol) {
+std::optional<Order> MatchingEngine::cancel_order(const OrderID &id, const Symbol &symbol,int side) {
   auto &book = get_or_create_order_book(symbol);
   Order *ptr = book.cancel_order(id);
   if (ptr) {
+    Order cancelled_data = *ptr; // Copy data before deallocation
     order_pool_.deallocate(ptr);
+    return cancelled_data;
   }
+  return std::nullopt; // Order not found
 }
 
 void MatchingEngine::printStats() const {

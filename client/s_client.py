@@ -1,179 +1,220 @@
 import socket
 import struct
+import threading
+import sys
 import time
 
+# --- CONFIGURATION ---
+HOST = 'localhost'
+PORT = 8080
+USER = "Trader1"
+PASS = "password"
 
-def login_request(sock, user_id, password):
-    """
-    Send login request to server.
+# --- COLORS ---
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    RESET = '\033[0m'
+    RED = '\033[91m'
+    YELLOW = '\033[93m'
 
-    Message Structure:
-    - Header: seq(H) + type(B) + length(H)
-    - Payload: user_id(20s) + password(20s)
-    """
-    header = struct.pack('<HBH', 0, ord('L'), 45)  # seq=0, type='L', length=45
-    login_req = struct.pack(
-        '<20s20s',
-        f"{user_id}".encode().ljust(20),
-        f"{password}".encode().ljust(20)
-    )
-    sock.send(header + login_req)
-    print("Sent login request")
+# --- PROTOCOL ---
+HEADER_FMT = '<HBH'
+HEADER_SIZE = 5
 
-    try:
-        data = sock.recv(1024)
-        if len(data) >= 5:
-            seq, msg_type, length = struct.unpack('<HBH', data[:5])
-            if chr(msg_type) == 'R':
-                status, _ = struct.unpack('<B50s', data[5:])
-                if status == 1:
-                    print("Login successful")
-                else:
-                    print("Login failed")
-                    return
-    except Exception as e:
-        print(f"Error receiving data: {e}")
+class TradingShell:
+    def __init__(self):
+        self.sock = None
+        self.running = True
+        self.seq_num = 0
+        self.base_prompt = f"{Colors.BOLD}Command (O/M/S/X/C): {Colors.ENDC}"
+        self.current_prompt = self.base_prompt 
+        self.lock = threading.Lock() 
 
+    # --- UI HELPERS ---
+    def clean_print(self, text, color=Colors.ENDC):
+        """
+        Wipes current line, prints async message, restores ACTIVE prompt.
+        """
+        with self.lock:
+            # 1. Clear current line
+            sys.stdout.write('\r' + ' ' * 80 + '\r')
+            
+            # 2. Print the async message
+            if text:
+                print(f"{color}{text}{Colors.ENDC}")
+            
+            # 3. Restore whatever prompt the user was staring at
+            sys.stdout.write(self.current_prompt)
+            sys.stdout.flush()
 
-def send_new_order(sock):
-    """
-    Send new order request to server.
+    def smart_input(self, prompt_text):
+        """
+        Sets current_prompt for clean_print to use, then waits for input.
+        """
+        with self.lock:
+            self.current_prompt = prompt_text
+            sys.stdout.write('\r' + ' ' * 80 + '\r') # Clear debris
+            sys.stdout.write(prompt_text)
+            sys.stdout.flush()
+        
+        # Read standard input (Blocking)
+        return sys.stdin.readline().strip()
 
-    Message Structure:
-    - Header: seq(H) + type(B) + length(H)
-    - Payload: client_order_id(Q) + symbol(10s) + side(B) + type(B) + price(d) + quantity(Q)
-    """
-    print("Sending new order request")
-    header = struct.pack('<HBH', 1, ord('N'), 41)  # seq=1, type='N', length=41
-    new_order_req = struct.pack(
-        '<Q10sBBdQ',
-        1,                           # client_order_id
-        b"AAPL".ljust(10),          # symbol
-        0,                           # side (0=Buy, 1=Sell)
-        1,                           # type (0=Market, 1=Limit)
-        150.00,                      # price
-        100                          # quantity
-    )
-    sock.send(header + new_order_req)
-    print("Sent new order request")
+    def _get_seq(self):
+        self.seq_num += 1
+        return self.seq_num
 
-    data = sock.recv(1024)
-    if len(data) >= 5:
-        print(f"\n[Client] Received {len(data)} bytes.")
-        seq, mtype, mlen = struct.unpack('<HBH', data[:5])
-        print(f"Header -> Type: {chr(mtype)}")
+    # --- NETWORKING ---
+    def connect(self):
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((HOST, PORT))
+            self.clean_print(f"[System] Connected to {HOST}:{PORT}", Colors.BLUE)
+            
+            t = threading.Thread(target=self.listen_loop, daemon=True)
+            t.start()
+            
+            self.send_login()
+            return True
+        except Exception as e:
+            print(f"{Colors.FAIL}[Error] Connect failed: {e}{Colors.ENDC}")
+            return False
 
-        if chr(mtype) == 'E':  # Execution Report
-            # Body Structure (from protocol.h):
-            # client_order_id (Q) + execution_id (Q) + symbol (10s) + side (B) +
-            # price (d) + quantity (Q) + filled_qty (Q) + status (B)
-            # Format: <QQ10sBdQQB
+    def send_login(self):
+        payload = struct.pack('<20s20s', USER.encode().ljust(20), PASS.encode().ljust(20))
+        self.send_packet('L', payload)
 
-            payload = data[5:]
+    def send_packet(self, msg_type, payload):
+        try:
+            header = struct.pack(HEADER_FMT, self._get_seq(), ord(msg_type), HEADER_SIZE + len(payload))
+            self.sock.sendall(header + payload)
+        except Exception as e:
+            print(f"{Colors.FAIL}[Error] Failed to send packet: {e}{Colors.ENDC}")
+            self.running = False
+
+    # --- LISTENER ---
+    def listen_loop(self):
+        while self.running:
             try:
-                (
-                    cid, exec_id, sym, side, px, qty, filled, status
-                ) = struct.unpack('<QQ10sBdQQB', payload)
+                header_data = self.sock.recv(HEADER_SIZE)
+                if not header_data: break
+                
+                seq, mtype_int, mlen = struct.unpack(HEADER_FMT, header_data)
+                body_len = mlen - HEADER_SIZE
+                payload = b''
+                while len(payload) < body_len:
+                    chunk = self.sock.recv(body_len - len(payload))
+                    if not chunk: break
+                    payload += chunk
+                
+                self.parse_message(chr(mtype_int), payload)
+            except:
+                break
+        self.clean_print("[System] Disconnected.", Colors.FAIL)
+        self.running = False
 
-                print("\n>>> EXECUTION REPORT <<<")
-                print(f"Client Order ID: {cid}")
-                print(f"Execution ID:    {exec_id}")
-                print(f"Symbol:          {sym.decode().strip(chr(0))}")
-                print(f"Side:            {'Buy' if side == 0 else 'Sell'}")
-                print(f"Price:           {px}")
-                print(f"Quantity:        {qty}")
-                print(f"Filled Qty:      {filled}")
-                print(f"Status:          {status} (0=New, 2=Filled, 1=Partially Filled, 3=Rejected)")
-            except struct.error as e:
-                print(f"Unpack Error: {e} - check protocol alignment!")
-    time.sleep(1)
+    def parse_message(self, mtype, data):
+        if mtype == 'R': # Login
+            st, msg = struct.unpack('<B50s', data)
+            msg = msg.decode().strip('\x00')
+            self.clean_print(f"[Login] {msg}", Colors.GREEN if st==1 else Colors.FAIL)
 
+        elif mtype == 'T': # Ticker
+            sym, px, qty,ts,side = struct.unpack('<10sdQQB', data)
+            sym = sym.decode().strip('\x00')
+            self.clean_print(f"[TICKER] {sym} {qty} @ ${px:.2f}", Colors.CYAN)
 
-def send_market_data_request(sock):
-    """
-    Send market data request to server.
+        elif mtype == 'E': # Execution
+            cid, eid, sym, side, px, qty, filled, stat = struct.unpack('<QQ10sBdQQB', data)
+            sym = sym.decode().strip('\x00')
+            side_str = "BUY" if side == 0 else "SELL"
+            status_map = {0:"New", 1:"Partial", 2:"FILLED", 3:"Cancelled"}
+            st_str = status_map.get(stat, "Unknown")
+            
+            # Format: [EXEC] BUY AAPL | Filled: 100/100 @ 150.00 | Status: FILLED
+            msg = f">>> EXEC: {side_str} {sym} | {filled}/{qty} @ {px:.2f} | {st_str}"
+            self.clean_print(msg, Colors.GREEN if stat==2 else Colors.WARNING)
 
-    Message Structure:
-    - Header: seq(H) + type(B) + length(H)
-    - Payload: symbol(10s)
-    - Total length: 15 bytes (5 header + 10 symbol)
-    """
-    print("Sending market data request")
-    header = struct.pack('<HBH', 2, ord('M'), 15)  # seq=2, type='M', length=15
-    md_req = struct.pack('<10s', b"AAPL".ljust(10))  # symbol="AAPL"
-    sock.send(header + md_req)
-    print("Sent market data request")
+        elif mtype == 'S': # Snapshot
+            sym, n_bids, n_asks = struct.unpack('<10sII', data[:18])
+            sym = sym.decode().strip('\x00')
+            lines = [f"\n--- BOOK: {sym} ---"]
+            
+            offset = 18
+            for i in range(5): # Bids
+                p, q = struct.unpack('<dQ', data[offset:offset+16])
+                if i < n_bids: lines.append(f"{Colors.GREEN}BID: {q} @ {p:.2f}{Colors.ENDC}")
+                offset += 16
+                
+            offset = 18 + (5*16)
+            for i in range(5): # Asks
+                p, q = struct.unpack('<dQ', data[offset:offset+16])
+                if i < n_asks: lines.append(f"{Colors.FAIL}ASK: {q} @ {p:.2f}{Colors.ENDC}")
+                offset += 16
+            
+            self.clean_print("\n".join(lines))
 
-    data = sock.recv(1024)
-    if len(data) >= 5:
-        print(f"\n[Client] Received {len(data)} bytes.")
-        seq, mtype, mlen = struct.unpack('<HBH', data[:5])
-        print(f"Header -> Type: {chr(mtype)}")
+    # --- MAIN LOOP ---
+    def run(self):
+        if not self.connect(): return
+        time.sleep(0.5)
 
-        if chr(mtype) == 'S':  # Market Data Snapshot
-            # Body Structure (from protocol.h):
-            # symbol (10s) + best_bid_price (d) + best_bid_qty (Q) +
-            # best_ask_price (d) + best_ask_qty (Q)
-           
-            fmt = '<10sII' + ('dQ' * 5) + ('dQ' * 5)
-            payload = data[5:]
+        while self.running:
             try:
-                unpacked_data = struct.unpack(fmt, payload)
+                # Use smart_input instead of standard input/print
+                cmd = self.smart_input(self.base_prompt).upper()
                 
-                # Extract fields
-                symbol = unpacked_data[0].decode().strip(chr(0))
-                num_bids = unpacked_data[1]
-                num_asks = unpacked_data[2]
+                if not cmd: continue
+
+                if cmd == 'X':
+                    self.running = False
+                    self.sock.close()
+                    break
+
+                elif cmd == 'O':
+                    try:
+                        # Sub-menu prompts are now protected from interruptions
+                        sym = self.smart_input(f"{Colors.HEADER}  Symbol: {Colors.ENDC}")
+                        side = 0 if self.smart_input(f"{Colors.HEADER}  Side (B/S): {Colors.ENDC}").upper() == 'B' else 1
+                        type_ = 0 if self.smart_input(f"{Colors.HEADER}  Type (M/L): {Colors.ENDC}").upper() == 'M' else 1
+                        px = float(self.smart_input(f"{Colors.HEADER}  Price: {Colors.ENDC}"))
+                        qty = int(self.smart_input(f"{Colors.HEADER}  Qty: {Colors.ENDC}"))
+                        
+                        payload = struct.pack('<Q10sBBdQ', self._get_seq(), sym.encode().ljust(10), side, type_, px, qty)
+                        self.send_packet('N', payload)
+                        self.clean_print("Order Sent.", Colors.GREEN)
+                    except ValueError:
+                        self.clean_print("Invalid Input.", Colors.FAIL)
+
+                elif cmd == 'S':
+                    sym = self.smart_input("Symbol to Subscribe: ")
+                    payload = struct.pack('<10sB', sym.encode().ljust(10), 1) # 1 for subscribe
+                    self.send_packet('Q', payload)
+                    self.clean_print(f"Subscribed to {sym}", Colors.GREEN)
                 
-                print("\n>>> MARKET DATA SNAPSHOT <<<")
-                print(f"Symbol:   {symbol}")
-                print(f"Num Bids: {num_bids}")
-                print(f"Num Asks: {num_asks}")
+                elif cmd == 'M':
+                    sym = self.smart_input("Symbol to View: ")
+                    payload = struct.pack('<10s', sym.encode().ljust(10))
+                    self.send_packet('M', payload)
+                elif cmd == 'C':
+                    oid = int(self.smart_input("Order ID to Cancel: "))
+                    sym = self.smart_input("Symbol to Cancel: ")
+                    side = 0 if self.smart_input("Side (B/S): ").upper() == 'B' else 1
+                    payload = struct.pack('<Q10sB', oid, sym.encode().ljust(10), side)
+                    self.send_packet('C', payload)
+                    self.clean_print(f"Cancel Sent for Order ID {oid} on Symbol {sym}", Colors.WARNING)
 
-                # Slice the tuple to get bids and asks
-                # unpacked_data[0:3] are header fields
-                # unpacked_data[3:13] are bids (5 pairs of price,qty)
-                # unpacked_data[13:23] are asks (5 pairs of price,qty)
-                
-                print("--- Bids ---")
-                for i in range(5):
-                    if i < num_bids:
-                        idx = 3 + (i * 2)
-                        price = unpacked_data[idx]
-                        qty = unpacked_data[idx+1]
-                        print(f"Bid {i+1}: {price:.2f} @ {qty}")
-
-                print("--- Asks ---")
-                for i in range(5):
-                    if i < num_asks:
-                        idx = 13 + (i * 2)
-                        price = unpacked_data[idx]
-                        qty = unpacked_data[idx+1]
-                        print(f"Ask {i+1}: {price:.2f} @ {qty}")
-
-            except struct.error as e:
-                print(f"Unpack Error: {e}")
-                print(f"Payload len: {len(payload)}, Expected: {struct.calcsize(fmt)}")
-
-
-def main():
-    """Main entry point for the client."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(("localhost", 8080))
-    print("Connected to server")
-
-    login_request(sock, "user123", "password123")
-    time.sleep(0.5)
-    send_new_order(sock)
-    time.sleep(0.5)
-    send_market_data_request(sock)
-
-    sock.close()
-
+            except KeyboardInterrupt:
+                break
+        
+        print("Goodbye.")
 
 if __name__ == "__main__":
-    main()
-
-
-
-
+    TradingShell().run()

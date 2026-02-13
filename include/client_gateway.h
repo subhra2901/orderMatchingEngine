@@ -4,6 +4,7 @@
 #include <tcp_server.h>
 #include <protocol.h>
 #include <unordered_map>
+#include <set>
 #include <fstream>
 #include <../logging/logger.hpp>
 
@@ -34,6 +35,9 @@ private:
     void handleNewOrder(int fd, const NewOrderRequest& req);
     void handleMarketDataRequest(int fd, const MarketDataRequest& req);
     void handleNewOrderInternal(const NewOrderRequest& req, int user_id,int fd,bool is_replay = false);
+    void handleSubscriptionRequest(int fd, const SubscriptionRequest& req);
+    void broadcastTradeUpdate(const Trade& update);
+    void handleOrderCancel(int fd, const OrderCancelRequest& req);
 
     // Session information
     struct Session {
@@ -44,6 +48,7 @@ private:
     TcpServer& server_;
     MatchingEngine& engine_;
     std::unordered_map<int, Session> sessions_;
+    std::unordered_map<std::string, std::set<int>> market_data_subscriptions_; // symbol -> set of client fds subscribed to this symbol
 
     std::ofstream event_log_;
 };

@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 #include <atomic>
+#include <optional>
 
 class MatchingEngine {
 public:
@@ -19,7 +20,7 @@ public:
     bool validate_order(const Order& order);
 
     // Order management
-    void cancel_order(const OrderID& order_id, const Symbol& symbol);
+    std::optional<Order> cancel_order(const OrderID& order_id, const Symbol& symbol, int side);
 
     // Order book access
     OrderBook& get_or_create_order_book(const Symbol& symbol);
