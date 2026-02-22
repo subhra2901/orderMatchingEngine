@@ -31,3 +31,8 @@ logs/
 bins/
 .clang-format
 .editorconfig
+.venv
+*_pb2.py
+*_pb2.pyi
+*_pb2_grpc.py
+__pycache__/

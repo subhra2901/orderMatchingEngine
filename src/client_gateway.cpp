@@ -232,6 +232,7 @@ void ClientGateway::handleNewOrderInternal(const NewOrderRequest &req, int user_
         server_.sendPacket(fd, reinterpret_cast<const char *>(&report), sizeof(report));
         LOG_DEBUG << "No trades executed for client " << fd << " order " << order.id;
     }
+    broadcastMarketData(order.symbol);
 }
 
 void ClientGateway::replayEvents() {
@@ -330,6 +331,41 @@ void ClientGateway::handleOrderCancel(int fd, const OrderCancelRequest &req) {
     }
 
     server_.sendPacket(fd, reinterpret_cast<const char *>(&report), sizeof(report));
+    broadcastMarketData(symbol);
+}
+
+void ClientGateway::broadcastMarketData(const std::string &symbol) {
+    if (market_data_subscriptions_.find(symbol) == market_data_subscriptions_.end()) {
+        return; // save cpu cycles ha ha
+    }
+    OrderBook *book = engine_.get_order_book(symbol);
+    MarketDataSnapshot snapshot;
+    snapshot.header = {0, MessageType::MARKET_DATA_SNAPSHOT, sizeof(MarketDataSnapshot)};
+    strncpy(snapshot.symbol, symbol.c_str(), sizeof(snapshot.symbol) - 1);
+    snapshot.num_bids = 0;
+    snapshot.num_asks = 0;
+    if (!book) {
+        LOG_WARN << "No order book found for symbol " << symbol;
+        return;
+    } else {
+        auto l2_quote     = book->getL2Quote(5); // Get top 5 levels of the order book
+        snapshot.num_bids = l2_quote.bids.size();
+        snapshot.num_asks = l2_quote.asks.size();
+        for (size_t i = 0; i < snapshot.num_bids; ++i) {
+            snapshot.bids[i].price    = l2_quote.bids[i].first;
+            snapshot.bids[i].quantity = l2_quote.bids[i].second;
+        }
+        for (size_t i = 0; i < snapshot.num_asks; ++i) {
+            snapshot.asks[i].price    = l2_quote.asks[i].first;
+            snapshot.asks[i].quantity = l2_quote.asks[i].second;
+        }
+    }
+    auto &subscribers = market_data_subscriptions_[symbol];
+    for (const auto &fd : subscribers) {
+        if (sessions_.find(fd) != sessions_.end() && sessions_[fd].logged_in) {
+            server_.sendPacket(fd, reinterpret_cast<const char *>(&snapshot), sizeof(snapshot));
+        }
+    }
 }
 
 ClientGateway::~ClientGateway() {

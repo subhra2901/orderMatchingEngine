@@ -1,0 +1,67 @@
+syntax = "proto3";
+package trading;
+
+// ---Enums //
+enum OrderSide {
+    BUY =0;
+    SELL =1;
+}
+enum OrderType{
+    MARKET =0;
+    LIMIT =1;
+}
+//----messages----//
+message NewOrderRequest{
+    string symbol = 1;
+    OrderSide side = 2;
+    OrderType type = 3;
+    double price =4;
+    uint64  quantity =5;
+}
+message OrderResponse{
+    bool success = 1;
+    string message = 2;
+    uint64 order_id = 3;
+}
+message CancelOrderRequest{
+    uint64  order_id = 1;
+    string symbol = 2;
+    OrderSide side = 3;
+}
+message PriceLevel{
+    double price = 1;
+    uint64 quantity = 2;
+}
+message MarketDataRequest{
+    string symbol = 1 ;
+}
+message MarketDataSnapshot{
+    string symbol = 1 ;
+    repeated PriceLevel bids = 2;
+    repeated PriceLevel asks = 3;
+}
+message SessionRequest {
+  string client_id = 1;
+}
+message ExecutionReport{
+    uint64 order_id = 1;
+    uint64 execution_id = 2;
+    string symbol = 3;
+    OrderSide side = 4;
+    double price = 5;
+    uint64 quantity = 6;
+    uint64 filled_quantity =7;
+    string status = 8;
+}
+
+//----Services----
+
+service TradingGateway{
+    // Unary (one req -> one resp)
+    rpc PlaceOrder(NewOrderRequest) returns (OrderResponse);
+    rpc CancelOrder(CancelOrderRequest) returns (OrderResponse);
+    //Streaming
+    rpc StreamMarketData (MarketDataRequest) returns ( stream MarketDataSnapshot);
+    rpc StreamExecutions (SessionRequest) returns (stream ExecutionReport);
+    rpc RequestMarketDataSnapshot (MarketDataRequest) returns (MarketDataSnapshot);
+}

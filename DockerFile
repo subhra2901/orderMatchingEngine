@@ -1,0 +1,29 @@
+# Use a modern C++ image
+FROM ubuntu:22.04
+
+# Install build tools
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libgtest-dev \
+    libbenchmark-dev \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up work directory
+WORKDIR /app
+
+# Copy source code
+COPY . .
+
+# Build the Engine (Release Mode for Speed)
+RUN mkdir build && cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    make -j$(nproc)
+
+# Expose the trading port
+EXPOSE 8080
+
+# Default command: Run the engine
+CMD ["./build/ome_main", "--port", "8080"]

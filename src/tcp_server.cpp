@@ -6,6 +6,7 @@
 #include <tcp_server.h>
 #include <unistd.h>
 #include <vector>
+#include "logger.hpp"
 
 TcpServer::TcpServer(int port) : port_(port), running_(false) {
     serverFd_ = socket(AF_INET, SOCK_STREAM, 0);

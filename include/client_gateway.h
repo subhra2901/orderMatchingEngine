@@ -7,6 +7,7 @@
 #include <set>
 #include <tcp_server.h>
 #include <unordered_map>
+#include <string>
 
 class ClientGateway {
   public:
@@ -40,6 +41,7 @@ class ClientGateway {
     void handleSubscriptionRequest(int fd, const SubscriptionRequest &req);
     void broadcastTradeUpdate(const Trade &update);
     void handleOrderCancel(int fd, const OrderCancelRequest &req);
+    void broadcastMarketData(const std::string& symbol);
 
     void processPacket(int fd, const char* data);
 
