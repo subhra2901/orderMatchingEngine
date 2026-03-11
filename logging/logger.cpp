@@ -1,4 +1,4 @@
-#include "Logger.hpp"
+#include "logger.hpp"
 #include <chrono>
 
 #ifndef PROJECT_ROOT_PATH

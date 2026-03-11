@@ -1,4 +1,5 @@
-#include <../logging/logger.hpp>
+#include "matching_engine.h"
+#include "types.h"
 #include <algorithm>
 #include <chrono>
 #include <client_gateway.h>
@@ -6,7 +7,10 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <logger.hpp>
 #include <optional>
+#include <order_book.h>
+
 
 namespace {
 std::string clean_symbol(const char *raw, size_t size) {
@@ -103,7 +107,7 @@ void ClientGateway::processPacket(int fd, const char *data) {
 
 void ClientGateway::handleLogin(int fd, const LoginRequest &req) {
     sessions_[fd].logged_in = true;
-    sessions_[fd].user_id   = fd; // For simplicity, assign a fixed user
+    sessions_[fd].user_id   = fd;
 
     LoginResponse resp;
     resp.header = {0, MessageType::LOGIN_RESPONSE, sizeof(LoginResponse)};
@@ -168,7 +172,7 @@ void ClientGateway::handleNewOrderInternal(const NewOrderRequest &req, int user_
     // For replayed orders, we might want to skip certain checks or logging
     Order order;
     order.id       = req.client_order_id;
-    order.user_id  = user_id;
+    order.user_id  = req.user_id;
     order.symbol   = clean_symbol(req.symbol, sizeof(req.symbol));
     order.side     = req.side == 0 ? OrderSide::BUY : OrderSide::SELL;
     order.type     = req.type == 0 ? OrderType::MARKET : OrderType::LIMIT;
@@ -205,6 +209,7 @@ void ClientGateway::handleNewOrderInternal(const NewOrderRequest &req, int user_
             report.client_order_id = order.id;
             report.execution_id =
                 trade.buy_order_id; // For simplicity, use buy order ID as execution ID
+            report.user_id = order.user_id;
             strncpy(report.symbol, trade.symbol.c_str(), sizeof(report.symbol) - 1);
             report.side            = order.side == OrderSide::BUY ? 0 : 1;
             report.price           = trade.price;
@@ -214,6 +219,29 @@ void ClientGateway::handleNewOrderInternal(const NewOrderRequest &req, int user_
 
             server_.sendPacket(fd, reinterpret_cast<const char *>(&report), sizeof(report));
 
+            // Send to otherside of user
+            ExecutionReport m_report;
+            m_report.header = {0, MessageType::EXECUTION_REPORT, sizeof(ExecutionReport)};
+            m_report.client_order_id =
+                (order.side == OrderSide::BUY) ? trade.sell_order_id : trade.buy_order_id;
+            m_report.execution_id = trade.buy_order_id;
+            m_report.user_id =
+                (order.side == OrderSide::SELL) ? trade.buy_order_id : trade.sell_order_id;
+            strncpy(m_report.symbol, trade.symbol.c_str(), sizeof(m_report.symbol) - 1);
+            m_report.side     = (order.side == OrderSide::BUY) ? 1 : 0; // Opposite of Taker
+            m_report.price    = trade.price;
+            m_report.quantity = trade.quantity;
+            auto getbook      = engine_.get_order_book(req.symbol);
+            auto getorder     = getbook->getOrderbyId(req.client_order_id);
+            if (getorder) {
+                m_report.filled_quantity = getorder->quantity_filled;
+                m_report.status          = 2;
+            } else {
+                // Filled
+                m_report.filled_quantity = trade.quantity;
+                m_report.status          = 2;
+            }
+            server_.sendPacket(fd, reinterpret_cast<const char *>(&m_report), sizeof(m_report));
             broadcastTradeUpdate(trade); // Broadcast trade update to all clients
 
             LOG_DEBUG << "Sent execution report to client " << fd << " for order " << order.id;
@@ -223,6 +251,7 @@ void ClientGateway::handleNewOrderInternal(const NewOrderRequest &req, int user_
         report.header          = {0, MessageType::EXECUTION_REPORT, sizeof(ExecutionReport)};
         report.client_order_id = order.id;
         report.execution_id    = 0; // No execution
+        report.user_id         = order.user_id;
         strncpy(report.symbol, order.symbol.c_str(), sizeof(report.symbol) - 1);
         report.side            = order.side == OrderSide::BUY ? 0 : 1;
         report.price           = order.price;
@@ -312,6 +341,7 @@ void ClientGateway::handleOrderCancel(int fd, const OrderCancelRequest &req) {
     ExecutionReport report;
     report.header          = {0, MessageType::EXECUTION_REPORT, sizeof(ExecutionReport)};
     report.client_order_id = req.client_order_id;
+    report.user_id         = req.user_id;
     report.execution_id    = 0; // No Trade
     strncpy(report.symbol, symbol.c_str(), sizeof(report.symbol) - 1);
     if (cancelled_order) {

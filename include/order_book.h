@@ -1,12 +1,12 @@
 #pragma once
 
+#include <cstddef>
 #include <list>
 #include <map>
 #include <memory>
 #include <types.h>
 #include <unordered_map>
 #include <vector>
-
 
 class OrderBook {
     friend class MatchingEngine; // Allow MatchingEngine to access private members
@@ -18,6 +18,7 @@ class OrderBook {
     // Core methods
     void add_order(Order *order);
     Order *cancel_order(const OrderID &order_id);
+    Order *getOrderbyId(const OrderID &order_id);
 
     // Query methods
     Order *getBestBid(); // Returns pointer to best bid order

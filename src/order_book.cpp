@@ -1,5 +1,5 @@
-#include <algorithm>
-#include <iostream>
+
+#include "types.h"
 #include <order_book.h>
 
 #include <../logging/logger.hpp>
@@ -42,6 +42,20 @@ Order *OrderBook::cancel_order(const OrderID &order_id) {
         LOG_INFO << "Cancelled order ID: " << order_id;
         return info.order_ptr; // Return pointer to cancelled order
     }
+    return nullptr;
+}
+
+Order *OrderBook::getOrderbyId(const OrderID &orderid) {
+    // Search the lookup map for the order ID
+    auto it = order_lookup_.find(orderid);
+    
+    // If found, return the pointer to the Order
+    if (it != order_lookup_.end()) {
+        return it->second.order_ptr; 
+    }
+    
+    // Log a warning or return nullptr if not found
+    LOG_DEBUG << "Order ID: " << orderid << " not found in OrderBook.";
     return nullptr;
 }
 

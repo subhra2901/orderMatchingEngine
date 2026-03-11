@@ -34,6 +34,7 @@ struct LoginRequest {
 struct NewOrderRequest {
     MessageHeader header;
     uint64_t client_order_id;
+    uint64_t user_id;
     char symbol[10];
     uint8_t side; // 0=Buy, 1=Sell
     uint8_t type; // 0=Market, 1=Limit
@@ -70,6 +71,7 @@ struct MarketDataSnapshot {
 struct ExecutionReport {
     MessageHeader header;
     uint64_t client_order_id;
+    uint64_t user_id;
     uint64_t execution_id;
     char symbol[10];
     uint8_t side; // 0=Buy, 1=Sell
@@ -97,6 +99,7 @@ struct TradeUpdate {
 struct OrderCancelRequest {
     MessageHeader header;
     uint64_t client_order_id;
+    uint64_t user_id;
     char symbol[10];
     uint8_t side; // 0=Buy, 1=Sell
 };
